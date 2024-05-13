@@ -1,0 +1,6 @@
+{
+    "sketch": "arduino-tts-webserver.ino",
+    "output": "build",
+    "board": "arduino:avr:uno",
+    "port": "COM4"
+}
