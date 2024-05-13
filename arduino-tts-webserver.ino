@@ -75,8 +75,8 @@ public:
     AnalogInpin(int p_no)
     {
         pinMode(p_no, INPUT_PULLUP);
-        _p_no = p_no;
     }
+
     int get()
     {
         return analogRead(_p_no);
@@ -99,7 +99,7 @@ int clientPrint(EthernetClient cl, char *msg)
     cl.stop();
 }
 
-HeartBeat heartBeatLed(HEARTBEAT_LED_PIN, 1000, 20000);
+HeartBeat heartBeatLed(HEARTBEAT_LED_PIN, 2000, 5000);
 
 DigitalOutpin pwrRelay(PWR_RELAY_PIN);
 DigitalOutpin soundRelay(SOUND_RELAY_PIN);
@@ -120,6 +120,8 @@ char string[32];
 char *p;
 String suburl;
 
+char buffer[10];
+
 void setup()
 {
     Serial.begin(115200);
@@ -131,7 +133,7 @@ void setup()
     debugLed1.set(0);
     debugLed2.set(0);
 
-    Serial.println("Ethernet WebServer Example");
+    Serial.println("Ethernet WebServer");
 
     if (Ethernet.begin(mac) == 0)
     {
@@ -161,7 +163,6 @@ void loop()
 
     EthernetClient client = server.available();
     heartBeatLed.run();
-
     if (client)
     {
         while (client.connected())
@@ -187,29 +188,35 @@ void loop()
                         {
                             clientPrint(client, "Power Relay is on");
                             Serial.println("PWR ON");
-                            pwrRelay.set(1);
+                            pwrRelay.set(0);
                             debugLed1.set(1);
                         }
                         else if (!strcmp(p, "/pwrrelayoff"))
                         {
                             clientPrint(client, "Power Relay is off");
                             Serial.println("PWR OFF");
-                            pwrRelay.set(0);
+                            pwrRelay.set(2);
                             debugLed1.set(0);
                         }
                         else if (!strcmp(p, "/soundrelayon"))
                         {
                             clientPrint(client, "Sound Relay is on");
                             Serial.println("SOUND ON");
-                            soundRelay.set(1);
+                            soundRelay.set(0);
                             debugLed2.set(1);
                         }
                         else if (!strcmp(p, "/soundrelayoff"))
                         {
                             clientPrint(client, "Sound Relay is off");
                             Serial.println("SOUND OFF");
-                            soundRelay.set(0);
+                            soundRelay.set(1);
                             debugLed2.set(0);
+                        }
+                        else if (!strcmp(p, "/status"))
+                        {
+                            itoa(hallSensor.get(), buffer, 10);
+                            Serial.println(buffer);
+                            clientPrint(client, buffer);
                         }
                         else
                         {
