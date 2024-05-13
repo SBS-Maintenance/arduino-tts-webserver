@@ -1,13 +1,125 @@
 #include "./src/Ethernet.h"
 
+#define HEARTBEAT_LED_PIN 2
+#define PWR_RELAY_PIN 6
+#define SOUND_RELAY_PIN 7
+#define DEBUG_LED1_PIN 8
+#define DEBUG_LED2_PIN 9
+
+#define HALL_SENSOR_PIN A1
+#define SW1_PIN A2
+#define SW2_PIN A3
+#define SW3_PIN A4
+
+class DigitalOutpin
+{
+private:
+    int _p_no;
+    int _state;
+
+public:
+    DigitalOutpin(int p_no)
+    {
+        pinMode(p_no, OUTPUT);
+        _p_no = p_no;
+    }
+
+    void set(int val)
+    {
+        digitalWrite(_p_no, val);
+        Serial.print("Pin ");
+        Serial.print(_p_no);
+        Serial.print(" is set to ");
+        Serial.println(val);
+        _state = val;
+    }
+
+    void toggle()
+    {
+        _state = !_state;
+        digitalWrite(_p_no, _state);
+    }
+};
+
+class HeartBeat : public DigitalOutpin
+{
+private:
+    int _duty, _duty_count, _period;
+    unsigned long _count;
+
+public:
+    HeartBeat(int p_no, int duty, int period) : DigitalOutpin(p_no)
+    {
+        _duty = duty;
+        _duty_count = int(period * duty / 100);
+        _period = period;
+        _count = 0;
+    }
+
+    void run()
+    {
+        _count++;
+        if ((_count == 1) | (_count == _duty_count))
+            toggle();
+        else if (_count == _period)
+            _count = 0;
+    }
+};
+
+class AnalogInpin
+{
+private:
+    int _p_no;
+
+public:
+    AnalogInpin(int p_no)
+    {
+        pinMode(p_no, INPUT_PULLUP);
+        _p_no = p_no;
+    }
+    int get()
+    {
+        return analogRead(_p_no);
+    }
+};
+
+int clientPrint(EthernetClient cl, char *msg)
+{
+    cl.println("HTTP/1.1 200 OK");
+    cl.println("Content-Type: text/html");
+    cl.println("Connection: close"); // the connection will be closed after completion of the response
+    cl.println();
+    cl.println("<!DOCTYPE HTML>");
+    cl.println("<html>");
+    cl.println(msg);
+    cl.println("</html>");
+    // give the web browser time to receive the data
+    delay(1);
+    // close the connection:
+    cl.stop();
+}
+
+HeartBeat heartBeatLed(HEARTBEAT_LED_PIN, 1000, 20000);
+
+DigitalOutpin pwrRelay(PWR_RELAY_PIN);
+DigitalOutpin soundRelay(SOUND_RELAY_PIN);
+DigitalOutpin debugLed1(DEBUG_LED1_PIN);
+DigitalOutpin debugLed2(DEBUG_LED2_PIN);
+
+AnalogInpin hallSensor(HALL_SENSOR_PIN);
+AnalogInpin sw1(SW1_PIN);
+AnalogInpin sw2(SW2_PIN);
+AnalogInpin sw3(SW3_PIN);
+
 byte mac[] = {
     0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
 EthernetServer server(80);
 
-char string[16];
+char string[32];
 char *p;
 String suburl;
+
 void setup()
 {
     Serial.begin(115200);
@@ -15,6 +127,10 @@ void setup()
     {
         ; // wait for serial port to connect. Needed for native USB port only
     }
+    heartBeatLed.set(0);
+    debugLed1.set(0);
+    debugLed2.set(0);
+
     Serial.println("Ethernet WebServer Example");
 
     if (Ethernet.begin(mac) == 0)
@@ -42,7 +158,9 @@ void setup()
 
 void loop()
 {
+
     EthernetClient client = server.available();
+    heartBeatLed.run();
 
     if (client)
     {
@@ -59,24 +177,50 @@ void loop()
                     p = strtok(NULL, " ");
                     if (p[0] == '/')
                     {
+                        Serial.println(p);
                         if (!strcmp(p, "/test"))
+                        {
+                            clientPrint(client, "This is test url");
                             Serial.println("test");
-                        if (!strcmp(p, "/relay1on"))
-                            Serial.println("Relay 1 is on");
-                        if (!strcmp(p, "/relay1off"))
-                            Serial.println("Relay 1 is off");
-                        if (!strcmp(p, "/relay2on"))
-                            Serial.println("Relay 2 is on");
-                        if (!strcmp(p, "/relay2off"))
-                            Serial.println("Relay 2 is off");
+                        }
+                        else if (!strcmp(p, "/pwrrelayon"))
+                        {
+                            clientPrint(client, "Power Relay is on");
+                            Serial.println("PWR ON");
+                            pwrRelay.set(1);
+                            debugLed1.set(1);
+                        }
+                        else if (!strcmp(p, "/pwrrelayoff"))
+                        {
+                            clientPrint(client, "Power Relay is off");
+                            Serial.println("PWR OFF");
+                            pwrRelay.set(0);
+                            debugLed1.set(0);
+                        }
+                        else if (!strcmp(p, "/soundrelayon"))
+                        {
+                            clientPrint(client, "Sound Relay is on");
+                            Serial.println("SOUND ON");
+                            soundRelay.set(1);
+                            debugLed2.set(1);
+                        }
+                        else if (!strcmp(p, "/soundrelayoff"))
+                        {
+                            clientPrint(client, "Sound Relay is off");
+                            Serial.println("SOUND OFF");
+                            soundRelay.set(0);
+                            debugLed2.set(0);
+                        }
+                        else
+                        {
+                            clientPrint(client, "Wrong URL");
+                            Serial.println("Wrong URL");
+                        }
                     }
                 }
             }
         }
-        // give the web browser time to receive the data
-        delay(1);
-        // close the connection:
-        client.stop();
+
         Serial.println("client disconnected");
     }
 }
